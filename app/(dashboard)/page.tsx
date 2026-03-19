@@ -364,7 +364,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ChartCard title="Overall Conversion Rate" className="lg:col-span-1">
           <div className="flex flex-col items-center justify-center py-8">
-            <div className="text-5xl font-bold text-primary mb-2">{conversionRate.toFixed(1)}%</div>
+            <div className="text-5xl font-bold text-primary mb-2">{(conversionRate != null && !Number.isNaN(conversionRate) ? conversionRate : 0).toFixed(1)}%</div>
             <p className="text-muted-foreground text-center text-sm">From signups to applications</p>
           </div>
         </ChartCard>
@@ -428,7 +428,7 @@ export default function OverviewPage() {
               key: 'conversionRate',
               label: 'Conversion Rate',
               sortable: true,
-              render: (value) => `${(value as number).toFixed(1)}%`,
+              render: (value) => (value != null && typeof value === 'number' && !Number.isNaN(value)) ? `${Number(value).toFixed(1)}%` : '—',
             },
           ]}
           data={leaderboardData}

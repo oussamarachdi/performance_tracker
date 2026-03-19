@@ -163,7 +163,7 @@ export default function ProductsPage() {
                   borderRadius: '8px',
                 }}
                 labelStyle={{ color: '#f5f5f5' }}
-                formatter={(value) => `${(value as number).toFixed(1)}%`}
+                formatter={(value) => (value != null && typeof value === 'number' && !Number.isNaN(value)) ? `${Number(value).toFixed(1)}%` : '—'}
               />
               <Legend />
               <Bar dataKey="conversionRate" fill="#f59e0b" />
@@ -228,7 +228,7 @@ export default function ProductsPage() {
               key: 'conversionRate',
               label: 'Conversion Rate',
               sortable: true,
-              render: (value) => `${(value as number).toFixed(1)}%`,
+              render: (value) => (value != null && typeof value === 'number' && !Number.isNaN(value)) ? `${Number(value).toFixed(1)}%` : '—',
             },
           ]}
           data={productsWithMembersCount}

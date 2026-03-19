@@ -97,7 +97,7 @@ export function ProductDetailPanel({ product, onClose }: ProductDetailPanelProps
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 Conversion Rate
               </p>
-              <p className="text-3xl font-bold text-amber-400">{product.conversionRate.toFixed(1)}%</p>
+              <p className="text-3xl font-bold text-amber-400">{(product.conversionRate != null && !Number.isNaN(product.conversionRate) ? product.conversionRate : 0).toFixed(1)}%</p>
             </div>
             <div className="bg-card border border-border rounded-lg p-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">

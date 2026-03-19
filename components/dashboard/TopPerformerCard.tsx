@@ -6,10 +6,9 @@ interface TopPerformerCardProps {
 }
 
 export function TopPerformerCard({ member }: TopPerformerCardProps) {
-  const avgSignupsPerBooth =
-    member.boothsAttended > 0
-      ? (member.signups / member.boothsAttended).toFixed(1)
-      : '0';
+  const signups = member.signups != null ? member.signups : 0;
+  const booths = member.boothsAttended != null ? member.boothsAttended : 0;
+  const avgSignupsPerBooth = booths > 0 ? (signups / booths).toFixed(1) : '0';
 
   return (
     <div className="bg-[#1e293b] border border-border rounded-lg p-6 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300">

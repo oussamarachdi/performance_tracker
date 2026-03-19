@@ -228,7 +228,7 @@ export default function UniversitiesPage() {
               key: 'conversionRate',
               label: 'Conversion Rate',
               sortable: true,
-              render: (value) => `${(value as number).toFixed(1)}%`,
+              render: (value) => (value != null && typeof value === 'number' && !Number.isNaN(value)) ? `${Number(value).toFixed(1)}%` : '—',
             },
           ]}
           data={universityStats}

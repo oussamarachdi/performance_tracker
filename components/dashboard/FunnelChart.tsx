@@ -20,15 +20,17 @@ export function FunnelChart({ data }: FunnelChartProps) {
   return (
     <div className="flex flex-col items-center gap-3 py-4">
       {data.map((item, index) => {
-        const width = (item.value / maxValue) * 100;
-        const percentage = ((item.value / data[0].value) * 100).toFixed(1);
+        const val = item?.value != null && !Number.isNaN(item.value) ? item.value : 0;
+        const firstVal = data[0]?.value != null && !Number.isNaN(data[0].value) ? data[0].value : 1;
+        const width = maxValue > 0 ? (val / maxValue) * 100 : 0;
+        const percentage = firstVal > 0 ? ((val / firstVal) * 100).toFixed(1) : '0.0';
 
         return (
           <div key={index} className="w-full">
             <div className="flex items-center justify-between mb-2.5">
               <span className="text-sm font-semibold text-foreground">{item.name}</span>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">{item.value.toLocaleString()}</span>
+                <span className="text-xs text-muted-foreground">{val.toLocaleString()}</span>
                 <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-1 rounded">{percentage}%</span>
               </div>
             </div>
@@ -43,7 +45,7 @@ export function FunnelChart({ data }: FunnelChartProps) {
               >
                 {width > 15 && (
                   <span className="text-xs font-bold text-white tracking-tight">
-                    {item.value.toLocaleString()}
+                    {val.toLocaleString()}
                   </span>
                 )}
               </div>

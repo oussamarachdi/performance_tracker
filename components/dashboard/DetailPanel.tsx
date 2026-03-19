@@ -58,7 +58,7 @@ export function DetailPanel({ member, onClose }: DetailPanelProps) {
             </div>
             <div className="bg-secondary/30 rounded-lg p-4">
               <p className="text-xs text-muted-foreground mb-1">Conversion</p>
-              <p className="text-2xl font-bold text-green-500">{member.conversionRate.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-green-500">{(member.conversionRate != null && !Number.isNaN(member.conversionRate) ? member.conversionRate : 0).toFixed(1)}%</p>
             </div>
             <div className="bg-secondary/30 rounded-lg p-4">
               <p className="text-xs text-muted-foreground mb-1">Leads</p>
@@ -76,19 +76,19 @@ export function DetailPanel({ member, onClose }: DetailPanelProps) {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Leads</span>
-                <span className="text-sm font-semibold text-foreground">{member.leads} ({((member.leads / member.signups) * 100).toFixed(1)}%)</span>
+                <span className="text-sm font-semibold text-foreground">{member.leads} ({member.signups > 0 ? ((member.leads / member.signups) * 100).toFixed(1) : '0.0'}%)</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Contacted</span>
-                <span className="text-sm font-semibold text-foreground">{member.contacted} ({((member.contacted / member.signups) * 100).toFixed(1)}%)</span>
+                <span className="text-sm font-semibold text-foreground">{member.contacted} ({member.signups > 0 ? ((member.contacted / member.signups) * 100).toFixed(1) : '0.0'}%)</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Interested</span>
-                <span className="text-sm font-semibold text-foreground">{member.interested} ({((member.interested / member.signups) * 100).toFixed(1)}%)</span>
+                <span className="text-sm font-semibold text-foreground">{member.interested} ({member.signups > 0 ? ((member.interested / member.signups) * 100).toFixed(1) : '0.0'}%)</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Applied</span>
-                <span className="text-sm font-semibold text-foreground">{member.applied} ({((member.applied / member.signups) * 100).toFixed(1)}%)</span>
+                <span className="text-sm font-semibold text-foreground">{member.applied} ({member.signups > 0 ? ((member.applied / member.signups) * 100).toFixed(1) : '0.0'}%)</span>
               </div>
             </div>
           </div>

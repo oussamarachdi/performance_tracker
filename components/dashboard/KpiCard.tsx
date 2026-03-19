@@ -9,7 +9,8 @@ interface KpiCardProps {
 }
 
 export function KpiCard({ label, value, change, unit = '', trend }: KpiCardProps) {
-  const displayValue = unit === '%' ? value.toFixed(1) : value.toLocaleString();
+  const safeValue = value != null && !Number.isNaN(value) ? value : 0;
+  const displayValue = unit === '%' ? safeValue.toFixed(1) : safeValue.toLocaleString();
 
   return (
     <div className="bg-card border border-border rounded-lg p-6 flex flex-col hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300">
@@ -26,7 +27,7 @@ export function KpiCard({ label, value, change, unit = '', trend }: KpiCardProps
           >
             {trend === 'up' && <ArrowUp className="w-3 h-3" />}
             {trend === 'down' && <ArrowDown className="w-3 h-3" />}
-            {Math.abs(change).toFixed(1)}%
+            {Math.abs(change != null && !Number.isNaN(change) ? change : 0).toFixed(1)}%
           </div>
         )}
       </div>
