@@ -70,13 +70,19 @@ export async function fetchExpaApplicationPersonIds(): Promise<Set<string>> {
   try {
     const auth = getAuth();
     const sheets = google.sheets({ version: "v4", auth });
-    const range = "Expa Application!A:Z";
+    const range = "'Expa Application'!A:Z";
     const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
     const rows = res.data.values as string[][] | undefined;
-    if (!rows || rows.length < 2) return new Set();
+    if (!rows || rows.length < 2) {
+      console.warn("[Expa Application] Sheet returned no rows");
+      return new Set();
+    }
     const [headerRow, ...dataRows] = rows;
-    return parseExpaApplicationPersonIds(headerRow, dataRows);
-  } catch {
+    const ids = parseExpaApplicationPersonIds(headerRow, dataRows);
+    console.log(`[Expa Application] Found ${ids.size} unique Person IDs from ${dataRows.length} rows`);
+    return ids;
+  } catch (err) {
+    console.error("[Expa Application] Failed to fetch sheet:", err);
     return new Set();
   }
 }
@@ -93,13 +99,19 @@ export async function fetchMembersInfo(): Promise<Map<string, string>> {
   try {
     const auth = getAuth();
     const sheets = google.sheets({ version: "v4", auth });
-    const range = "Members Info!A:Z";
+    const range = "'Members Info'!A:Z";
     const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
     const rows = res.data.values as string[][] | undefined;
-    if (!rows || rows.length < 2) return new Map();
+    if (!rows || rows.length < 1) {
+      console.warn("[Members Info] Sheet returned no rows");
+      return new Map();
+    }
     const [headerRow, ...dataRows] = rows;
-    return parseMembersInfo(headerRow, dataRows);
-  } catch {
+    const map = parseMembersInfo(headerRow, dataRows);
+    console.log(`[Members Info] Found ${map.size} members from ${dataRows.length} rows`);
+    return map;
+  } catch (err) {
+    console.error("[Members Info] Failed to fetch sheet:", err);
     return new Map();
   }
 }

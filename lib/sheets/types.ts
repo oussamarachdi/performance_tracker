@@ -111,10 +111,7 @@ function findColumnIndex(headerRow: string[], candidates: string[]): number {
   return -1;
 }
 
-/**
- * Parse Expa Application sheet into a Set of unique person IDs (normalized, non-empty).
- * Sheet column is "Person ID" – prefer that first.
- */
+/** Expa sheet → Set of Person IDs (unique rows) = source for applied = COUNT(UNIQUE Person ID). */
 export function parseExpaApplicationPersonIds(headerRow: string[], dataRows: string[][]): Set<string> {
   const idx = findColumnIndex(headerRow, ["person id", "unique person id", "expa person id", "ep id", "expa id", "id"]);
   if (idx < 0) return new Set();
@@ -129,20 +126,34 @@ export function parseExpaApplicationPersonIds(headerRow: string[], dataRows: str
 
 /**
  * Parse Members Info sheet into Map(normalized name -> department).
- * Name column: "name", "member name", "person". Department column: "department", "dept".
- * Keys are normalized (trim + lowercase) for lookup against Signups memberName.
+ * The sheet may or may not have a header row. If the first row looks like a header
+ * (contains "name"/"department"), use it; otherwise treat ALL rows as data with
+ * column A = name, column B = department.
  */
 export function parseMembersInfo(headerRow: string[], dataRows: string[][]): Map<string, string> {
-  const nameIdx = findColumnIndex(headerRow, ["name", "member name", "person"]);
-  const deptIdx = findColumnIndex(headerRow, ["department", "dept"]);
-  if (nameIdx < 0 || deptIdx < 0) return new Map();
+  let nameIdx: number;
+  let deptIdx: number;
+  let rows: string[][];
+
+  const nameCheck = findColumnIndex(headerRow, ["name", "member name", "person"]);
+  const deptCheck = findColumnIndex(headerRow, ["department", "dept"]);
+
+  if (nameCheck >= 0 && deptCheck >= 0) {
+    nameIdx = nameCheck;
+    deptIdx = deptCheck;
+    rows = dataRows;
+  } else {
+    nameIdx = 0;
+    deptIdx = 1;
+    rows = [headerRow, ...dataRows];
+  }
+
   const map = new Map<string, string>();
-  for (const row of dataRows) {
+  for (const row of rows) {
     const name = nameIdx < row.length ? String(row[nameIdx] ?? "").trim() : "";
     const dept = deptIdx < row.length ? String(row[deptIdx] ?? "").trim() : "";
     if (name) {
-      const key = name.toLowerCase();
-      map.set(key, dept || "General");
+      map.set(name.toLowerCase(), dept || "General");
     }
   }
   return map;

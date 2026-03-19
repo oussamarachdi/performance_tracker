@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
 import {
   fetchSheetRows,
   fetchExpaApplicationPersonIds,
@@ -7,7 +6,10 @@ import {
 } from "@/lib/sheets/client";
 import { aggregate } from "@/lib/sheets/aggregate";
 
-async function getCachedDashboardData() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+async function getDashboardDataLive() {
   const [rows, expaPersonIds, memberDepartmentByName] = await Promise.all([
     fetchSheetRows(),
     fetchExpaApplicationPersonIds(),
@@ -16,17 +18,14 @@ async function getCachedDashboardData() {
   return aggregate(rows, expaPersonIds, memberDepartmentByName);
 }
 
-const CACHE_TAG = "dashboard-data";
-const REVALIDATE_SECONDS = 60;
-
 export async function GET() {
   try {
-    const data = await unstable_cache(
-      getCachedDashboardData,
-      [CACHE_TAG],
-      { revalidate: REVALIDATE_SECONDS, tags: [CACHE_TAG] }
-    )();
-    return NextResponse.json(data);
+    const data = await getDashboardDataLive();
+    return NextResponse.json(data, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load sheet data";
     return NextResponse.json({ error: message }, { status: 500 });

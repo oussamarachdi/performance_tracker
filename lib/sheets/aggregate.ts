@@ -1,6 +1,11 @@
 import type { RawSheetRow } from "./types";
 import type { Member, University, Product, CampaignData } from "@/lib/mockData";
 
+/**
+ * Applied = COUNT(UNIQUE Person ID) from the Expa Application sheet (`expaPersonIds.size`).
+ * Without that sheet, applied falls back to signup count.
+ */
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const TEXT_ACCOUNT_CREATED = "created successfully";
@@ -97,28 +102,6 @@ function emptyMemberBucket(): MemberBucket {
   };
 }
 
-// ─── Applied-count resolution ─────────────────────────────────────────────────
-
-/**
- * Decide whether EXPA data should be used as the source of truth for "applied".
- *
- * Rules:
- *  - If no EXPA set was provided → false (use signups as proxy).
- *  - If at least one signed-up person matched in EXPA → true.
- *  - If EXPA was provided but zero rows matched → false (EXPA data is stale /
- *    mis-joined; fall back to signups so we don't silently report 0 applied).
- */
-function resolveAppliedStrategy(
-  expaPersonIds: Set<string> | null,
-  signedUpIds: Set<string>
-): boolean {
-  if (!expaPersonIds || expaPersonIds.size === 0) return false;
-  for (const id of signedUpIds) {
-    if (expaPersonIds.has(id)) return true;
-  }
-  return false;  // EXPA present but no overlap → don't trust it
-}
-
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface AggregatedDepartment {
@@ -166,17 +149,10 @@ export function aggregate(
     (r) => r.memberName || r.universityName || r.internshipType || r.submittedAt
   );
 
-  // 2. Collect signed-up person IDs for EXPA matching
-  const signedUpPersonIds = new Set<string>();
-  for (const r of rows) {
-    if (isSignedUp(r.accountStatus) && r.personId) {
-      signedUpPersonIds.add(r.personId);
-    }
-  }
+  // Applied (global) = COUNT(UNIQUE Person ID) on Expa Application sheet
+  const hasExpa = expaPersonIds != null && expaPersonIds.size > 0;
 
-  const useExpa = resolveAppliedStrategy(expaPersonIds, signedUpPersonIds);
-
-  // 3. Per-row accumulation into four lookup maps
+  // Per-row accumulation into four lookup maps
   const byMember     = new Map<string, MemberBucket>();
   const byUniversity = new Map<string, Bucket>();
   const byProduct    = new Map<string, Bucket>();
@@ -188,18 +164,13 @@ export function aggregate(
     const already   = isAlreadyExists(r.accountStatus);
     const date      = parseDateOnly(r.submittedAt);
 
-    /**
-     * Applied dedup key:
-     *  - EXPA mode:     person's EXPA ID (deduplicates people who filled the
-     *                   form more than once).
-     *  - Non-EXPA mode: row sentinel – every signed-up row counts once,
-     *                   no cross-entity deduplication needed.
-     */
-    const appliedId: string | null =
-      signedup
-        ? useExpa
-          ? (r.personId && expaPersonIds!.has(r.personId) ? r.personId : null)
-          : `__row_${i}`
+    // Per-entity applied: unique Person IDs (from Expa) seen on Signups rows in this bucket
+    const appliedId: string | null = hasExpa
+      ? r.personId && expaPersonIds!.has(r.personId)
+        ? r.personId
+        : null
+      : signedup
+        ? `__row_${i}`
         : null;
 
     // ── University ──
@@ -243,22 +214,10 @@ export function aggregate(
     }
   }
 
-  // 4. Totals (computed directly, not derived from entity maps to avoid
-  //    double-counting the same person appearing under multiple entities)
-  const totalLeads        = rows.length;
-  const totalSignups      = rows.filter((r) => isSignedUp(r.accountStatus)).length;
+  const totalLeads = rows.length;
+  const totalSignups = rows.filter((r) => isSignedUp(r.accountStatus)).length;
   const totalAlreadyExists = rows.filter((r) => isAlreadyExists(r.accountStatus)).length;
-  const totalApplied      = useExpa
-    ? (() => {
-        const s = new Set<string>();
-        for (const r of rows) {
-          if (isSignedUp(r.accountStatus) && r.personId && expaPersonIds!.has(r.personId)) {
-            s.add(r.personId);
-          }
-        }
-        return s.size;
-      })()
-    : totalSignups;
+  const totalApplied = hasExpa ? expaPersonIds!.size : totalSignups;
 
   const leadConversionRate  = totalLeads    ? (totalApplied / totalLeads)    * 100 : 0;
   const signupToApplyRate   = totalSignups  ? (totalApplied / totalSignups)  * 100 : 0;

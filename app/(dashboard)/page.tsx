@@ -104,6 +104,11 @@ export default function OverviewPage() {
 
   const isMemberView = selectedMember !== null;
 
+  /**
+   * Signups/Leads/Booths respect filters; Applied uses API `totals.applied` = all unique
+   * applicants in Expa (not the sum of per-member applied, which only counts people who
+   * appear on Signups rows).
+   */
   const filteredTotals = useMemo(() => {
     if (isMemberView && selectedMember) {
       const m = selectedMember;
@@ -115,20 +120,30 @@ export default function OverviewPage() {
         avgSignupsPerBooth: m.boothsAttended > 0 ? Number((m.signups / m.boothsAttended).toFixed(1)) : 0,
       };
     }
-    return filteredMembers.reduce(
+    const rolled = filteredMembers.reduce(
       (acc, m) => ({
         signups: acc.signups + m.signups,
         leads: acc.leads + m.leads,
-        applied: acc.applied + m.applied,
         boothsAttended: acc.boothsAttended + m.boothsAttended,
         avgSignupsPerBooth: 0,
       }),
-      { signups: 0, leads: 0, applied: 0, boothsAttended: 0, avgSignupsPerBooth: 0 }
+      { signups: 0, leads: 0, boothsAttended: 0, avgSignupsPerBooth: 0 }
     );
-  }, [isMemberView, selectedMember, filteredMembers]);
+    return {
+      ...rolled,
+      applied: data?.totals?.applied ?? 0,
+    };
+  }, [isMemberView, selectedMember, filteredMembers, data?.totals?.applied]);
 
-  const conversionRate =
-    filteredTotals.signups > 0 ? (filteredTotals.applied / filteredTotals.signups) * 100 : 0;
+  /** Global signup→apply rate from API totals; member view uses that member only. */
+  const conversionRate = useMemo(() => {
+    if (isMemberView && selectedMember) {
+      return selectedMember.signups > 0 ? (selectedMember.applied / selectedMember.signups) * 100 : 0;
+    }
+    const t = data?.totals;
+    if (t && t.signups > 0) return (t.applied / t.signups) * 100;
+    return 0;
+  }, [isMemberView, selectedMember, data?.totals]);
 
   const chartData = useMemo(() => {
     const startRaw = dateRange.start?.getTime();

@@ -56,7 +56,7 @@ export default function ProductsPage() {
   const totalSignups = filteredProducts.reduce((sum, p) => sum + p.signups, 0);
   const totalLeads = filteredProducts.reduce((sum, p) => sum + p.leads, 0);
   const totalContacted = filteredProducts.reduce((sum, p) => sum + p.contacted, 0);
-  const totalApplied = filteredProducts.reduce((sum, p) => sum + p.applied, 0);
+  const totalApplied = data?.totals?.applied ?? 0;
   const totalMembersSelling = productsWithMembersCount.reduce((sum, p) => sum + p.membersSelling, 0);
 
   const chartData = productsWithMembersCount.map((p) => ({

@@ -38,7 +38,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     return mockData as DashboardData;
   }
   try {
-    const res = await fetch("/api/data");
+    const res = await fetch("/api/data", { cache: "no-store" });
     if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
     const data = (await res.json()) as DashboardData;
     return data;

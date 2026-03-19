@@ -40,7 +40,7 @@ export default function DepartmentsPage() {
   const totalSignups = filteredDepartments.reduce((sum, d) => sum + d.signups, 0);
   const totalLeads = filteredDepartments.reduce((sum, d) => sum + d.leads, 0);
   const totalContacted = filteredDepartments.reduce((sum, d) => sum + d.contacted, 0);
-  const totalApplied = filteredDepartments.reduce((sum, d) => sum + d.applied, 0);
+  const totalApplied = data?.totals?.applied ?? 0;
 
   // Attendee performance by department (from members)
   const attendeePerformanceByDept = filteredDepartments.map((dept) => {
