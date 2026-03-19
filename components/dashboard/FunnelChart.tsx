@@ -1,3 +1,5 @@
+import { CHART_COLORS_ARRAY } from '@/lib/chartColors';
+
 interface FunnelData {
   name: string;
   value: number;
@@ -13,7 +15,7 @@ export function FunnelChart({ data }: FunnelChartProps) {
   }
 
   const maxValue = Math.max(...data.map((d) => d.value));
-  const colors = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899'];
+  const colors = [...CHART_COLORS_ARRAY];
 
   return (
     <div className="flex flex-col items-center gap-3 py-4">

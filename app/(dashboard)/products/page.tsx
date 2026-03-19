@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { mockData } from '@/lib/mockData';
+import { useState, useMemo, useEffect } from 'react';
+import { getDashboardData } from '@/lib/api';
+import type { DashboardData } from '@/lib/api';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { FilterBar } from '@/components/dashboard/FilterBar';
-import { DataTable, Column } from '@/components/dashboard/DataTable';
+import { DataTable } from '@/components/dashboard/DataTable';
 import { ProductDetailPanel } from '@/components/dashboard/ProductDetailPanel';
 import { DateRange } from '@/components/dashboard/DateRangeFilter';
 import {
@@ -21,34 +22,50 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import { CHART_COLORS } from '@/lib/chartColors';
 
-const COLORS = ['#3b82f6', '#06b6d4', '#10b981'];
+const COLORS = [CHART_COLORS.primary, CHART_COLORS.secondary, CHART_COLORS.accent];
 
 export default function ProductsPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
-  const [selectedProduct, setSelectedProduct] = useState<typeof mockData.products[0] | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<DashboardData['products'][0] | null>(null);
 
-  // Filter products based on date range
-  const filteredProducts = mockData.products.filter((p) => {
-    // Date range filtering (placeholder - would need actual date data)
-    if (dateRange.start || dateRange.end) {
-      return true;
-    }
-    return true;
-  });
+  useEffect(() => {
+    getDashboardData().then(setData);
+  }, []);
+
+  const filteredProducts = useMemo(() => {
+    const products = data?.products ?? [];
+    const members = data?.members ?? [];
+    if (selectedDepartments.length === 0) return products;
+    return products.filter((p) =>
+      members.some((m) => selectedDepartments.includes(m.department) && m.productsPromoted.includes(p.id))
+    );
+  }, [data?.products, data?.members, selectedDepartments]);
+
+  const productsWithMembersCount = useMemo(() => {
+    const members = data?.members ?? [];
+    return filteredProducts.map((p) => {
+      const membersSelling = members.filter((m) => m.productsPromoted.includes(p.id)).length;
+      return { ...p, membersSelling };
+    });
+  }, [filteredProducts, data?.members]);
 
   const totalSignups = filteredProducts.reduce((sum, p) => sum + p.signups, 0);
   const totalLeads = filteredProducts.reduce((sum, p) => sum + p.leads, 0);
   const totalContacted = filteredProducts.reduce((sum, p) => sum + p.contacted, 0);
   const totalApplied = filteredProducts.reduce((sum, p) => sum + p.applied, 0);
+  const totalMembersSelling = productsWithMembersCount.reduce((sum, p) => sum + p.membersSelling, 0);
 
-  const chartData = filteredProducts.map((p) => ({
+  const chartData = productsWithMembersCount.map((p) => ({
     name: p.name,
     signups: p.signups,
     leads: p.leads,
     applied: p.applied,
     conversionRate: p.conversionRate,
+    membersSelling: p.membersSelling,
   }));
 
   const handleReset = () => {
@@ -56,6 +73,14 @@ export default function ProductsPage() {
     setDateRange({ start: null, end: null });
     setSelectedProduct(null);
   };
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center min-h-[320px]">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -69,20 +94,21 @@ export default function ProductsPage() {
         filters={[
           {
             label: 'Departments',
-            options: mockData.departments.map((d) => ({ label: d.name, value: d.name })),
+            options: data.departments.map((d) => ({ label: d.name, value: d.name })),
             selected: selectedDepartments,
             onChange: setSelectedDepartments,
           },
         ]}
         onDateRangeChange={setDateRange}
         onReset={handleReset}
+        hasDateRangeActive={!!(dateRange.start || dateRange.end)}
+        dateRange={dateRange}
       />
 
       {/* Summary KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Total Signups" value={totalSignups} trend="up" change={12.5} />
         <KpiCard label="Total Leads" value={totalLeads} trend="up" change={8.2} />
-        <KpiCard label="Total Contacted" value={totalContacted} trend="up" change={15.3} />
         <KpiCard label="Total Applied" value={totalApplied} trend="up" change={18.7} />
       </div>
 
@@ -146,43 +172,57 @@ export default function ProductsPage() {
         </ChartCard>
       </div>
 
+      {/* Members selling per product */}
+      <ChartCard
+        title="Members Selling per Product"
+        description="Number of team members promoting each product"
+      >
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+            <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: '12px' }} />
+            <YAxis stroke="#94a3b8" style={{ fontSize: '12px' }} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+              labelStyle={{ color: '#F8FAFC' }}
+            />
+            <Bar dataKey="membersSelling" name="Members selling" fill={CHART_COLORS.accent} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
       {/* Performance Metrics */}
       <ChartCard
         title="Product Performance"
-        description="Signups, leads, and applications by product"
+        description="Signups, leads, applications and members selling by product"
         className="col-span-full"
       >
         <ResponsiveContainer width="100%" height={350}>
           <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
-            <XAxis dataKey="name" stroke="#a0a0a0" style={{ fontSize: '12px' }} />
-            <YAxis stroke="#a0a0a0" style={{ fontSize: '12px' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+            <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: '12px' }} />
+            <YAxis stroke="#94a3b8" style={{ fontSize: '12px' }} />
             <Tooltip
-              contentStyle={{
-                backgroundColor: '#252525',
-                border: '1px solid #404040',
-                borderRadius: '8px',
-              }}
-              labelStyle={{ color: '#f5f5f5' }}
+              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+              labelStyle={{ color: '#F8FAFC' }}
             />
             <Legend />
-            <Bar dataKey="signups" fill="#3b82f6" />
-            <Bar dataKey="leads" fill="#06b6d4" />
-            <Bar dataKey="applied" fill="#10b981" />
+            <Bar dataKey="signups" fill={CHART_COLORS.primary} />
+            <Bar dataKey="leads" fill={CHART_COLORS.secondary} />
+            <Bar dataKey="applied" fill={CHART_COLORS.accent} />
+            <Bar dataKey="membersSelling" name="Members selling" fill={CHART_COLORS.neutral} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
 
       {/* Products Table */}
       <ChartCard title="Product Details" description="Click a row to view details">
-        <DataTable<typeof mockData.products[0]>
+        <DataTable<(typeof productsWithMembersCount)[0]>
           columns={[
             { key: 'name', label: 'Product', sortable: true },
-            { key: 'description', label: 'Description', sortable: false },
+            { key: 'membersSelling', label: 'Members selling', sortable: true },
             { key: 'signups', label: 'Signups', sortable: true },
             { key: 'leads', label: 'Leads', sortable: true },
-            { key: 'contacted', label: 'Contacted', sortable: true },
-            { key: 'interested', label: 'Interested', sortable: true },
             { key: 'applied', label: 'Applied', sortable: true },
             {
               key: 'conversionRate',
@@ -191,8 +231,8 @@ export default function ProductsPage() {
               render: (value) => `${(value as number).toFixed(1)}%`,
             },
           ]}
-          data={filteredProducts}
-          onRowClick={(row) => setSelectedProduct(row)}
+          data={productsWithMembersCount}
+          onRowClick={(row) => setSelectedProduct(data.products.find((p) => p.id === row.id) ?? null)}
         />
       </ChartCard>
 

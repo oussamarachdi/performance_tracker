@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, X } from 'lucide-react';
 
 export interface DateRange {
@@ -11,23 +11,34 @@ export interface DateRange {
 interface DateRangeFilterProps {
   onDateRangeChange: (range: DateRange) => void;
   onReset: () => void;
+  /** When provided, display and local state stay in sync (e.g. clear when parent resets) */
+  value?: DateRange;
 }
 
-export function DateRangeFilter({ onDateRangeChange, onReset }: DateRangeFilterProps) {
+export function DateRangeFilter({ onDateRangeChange, onReset, value }: DateRangeFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [hasSelection, setHasSelection] = useState(false);
 
+  useEffect(() => {
+    if (value && value.start == null && value.end == null) {
+      setStartDate('');
+      setEndDate('');
+      setHasSelection(false);
+    } else if (value?.start || value?.end) {
+      setStartDate(value.start ? value.start.toISOString().slice(0, 10) : '');
+      setEndDate(value.end ? value.end.toISOString().slice(0, 10) : '');
+      setHasSelection(true);
+    }
+  }, [value?.start, value?.end]);
+
   const handleApply = () => {
     const start = startDate ? new Date(startDate) : null;
     const end = endDate ? new Date(endDate) : null;
-    
-    if (start || end) {
-      onDateRangeChange({ start, end });
-      setHasSelection(true);
-      setIsOpen(false);
-    }
+    onDateRangeChange({ start, end });
+    setHasSelection(!!(start || end));
+    setIsOpen(false);
   };
 
   const handleReset = () => {
@@ -38,10 +49,16 @@ export function DateRangeFilter({ onDateRangeChange, onReset }: DateRangeFilterP
   };
 
   const getDisplayText = () => {
-    if (!hasSelection) return 'Date Range';
-    if (startDate && endDate) {
-      return `${startDate} to ${endDate}`;
+    if (value && value.start == null && value.end == null) return 'Date Range';
+    if (value?.start || value?.end) {
+      const s = value.start?.toISOString().slice(0, 10) ?? '';
+      const e = value.end?.toISOString().slice(0, 10) ?? '';
+      if (s && e) return `${s} to ${e}`;
+      if (s) return `From ${s}`;
+      if (e) return `Until ${e}`;
     }
+    if (!hasSelection) return 'Date Range';
+    if (startDate && endDate) return `${startDate} to ${endDate}`;
     if (startDate) return `From ${startDate}`;
     if (endDate) return `Until ${endDate}`;
     return 'Date Range';

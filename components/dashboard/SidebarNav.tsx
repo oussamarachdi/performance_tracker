@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Users, Building2, ShoppingBag, Home } from 'lucide-react';
+import { BarChart3, Building2, ShoppingBag, Home } from 'lucide-react';
 
 const navItems = [
   {
@@ -14,11 +14,6 @@ const navItems = [
     label: 'Departments',
     href: '/departments',
     icon: BarChart3,
-  },
-  {
-    label: 'Members',
-    href: '/members',
-    icon: Users,
   },
   {
     label: 'Universities',
@@ -39,11 +34,14 @@ export function SidebarNav() {
     <aside className="w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex flex-col">
       {/* Logo/Title */}
       <div className="p-6 border-b border-sidebar-border bg-gradient-to-b from-sidebar to-sidebar/80">
+      <div className="flex items-center gap-3">
+        <img src={'/logo.png'} alt="Campaign Tracker" className="w-24 h-24" />
         <h1 className="text-xl font-bold tracking-tight">Campaign Tracker</h1>
+        </div>
         <p className="text-xs text-sidebar-foreground/60 mt-2">Physical Campaigns Analytics</p>
       </div>
 
-      {/* Navigation */}
+      {/* Navigation */}  
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;

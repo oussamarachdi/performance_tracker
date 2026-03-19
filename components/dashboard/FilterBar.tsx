@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Filter, X } from 'lucide-react';
 import { DateRangeFilter, type DateRange } from './DateRangeFilter';
 
@@ -19,12 +19,27 @@ interface FilterBarProps {
   onReset?: () => void;
   onDateRangeChange?: (range: DateRange) => void;
   showDateFilter?: boolean;
+  /** When true, Reset button shows even if only the date range is set */
+  hasDateRangeActive?: boolean;
+  /** Current date range (for DateRangeFilter display and sync on reset) */
+  dateRange?: DateRange;
 }
 
-export function FilterBar({ filters, onReset, onDateRangeChange, showDateFilter = true }: FilterBarProps) {
+export function FilterBar({ filters, onReset, onDateRangeChange, showDateFilter = true, hasDateRangeActive = false, dateRange }: FilterBarProps) {
   const [expandedFilter, setExpandedFilter] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const hasActiveFilters = filters.some((f) => f.selected.length > 0);
+  const hasActiveFilters = hasDateRangeActive || filters.some((f) => f.selected.length > 0);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (expandedFilter && dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setExpandedFilter(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [expandedFilter]);
 
   const handleDateReset = () => {
     if (onDateRangeChange) {
@@ -41,15 +56,17 @@ export function FilterBar({ filters, onReset, onDateRangeChange, showDateFilter 
         </div>
 
         {showDateFilter && onDateRangeChange && (
-          <DateRangeFilter 
+          <DateRangeFilter
             onDateRangeChange={onDateRangeChange}
             onReset={handleDateReset}
+            value={dateRange}
           />
         )}
 
-        {filters.map((filter, idx) => (
-          <div key={idx} className="relative">
+        {filters.map((filter) => (
+          <div key={filter.label} className="relative" ref={expandedFilter === filter.label ? dropdownRef : undefined}>
             <button
+              type="button"
               onClick={() =>
                 setExpandedFilter(expandedFilter === filter.label ? null : filter.label)
               }
@@ -64,20 +81,23 @@ export function FilterBar({ filters, onReset, onDateRangeChange, showDateFilter 
             </button>
 
             {expandedFilter === filter.label && (
-              <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg shadow-primary/5 z-10 min-w-52">
+              <div
+                className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg shadow-primary/5 z-10 min-w-52"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="p-3 space-y-1.5 max-h-72 overflow-y-auto">
                   {filter.options.map((option) => (
                     <label
-                      key={option.value}
+                      key={String(option.value)}
                       className="flex items-center gap-2 cursor-pointer hover:bg-secondary p-2.5 rounded-md transition-colors"
                     >
                       <input
                         type="checkbox"
-                        checked={filter.selected.includes(option.value)}
+                        checked={filter.selected.includes(String(option.value))}
                         onChange={(e) => {
                           const newSelected = e.target.checked
-                            ? [...filter.selected, option.value]
-                            : filter.selected.filter((s) => s !== option.value);
+                            ? [...filter.selected, String(option.value)]
+                            : filter.selected.filter((s) => s !== String(option.value));
                           filter.onChange(newSelected);
                         }}
                         className="w-4 h-4"
