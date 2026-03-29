@@ -8,9 +8,4 @@ node_modules/
 .next/
 .env*.local
 .DS_Store
-
-# Service account key (never commit)
-*service-account*.json
-service-account-key.json
-mkt-tracker.json
 .env

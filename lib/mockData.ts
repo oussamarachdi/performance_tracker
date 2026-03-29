@@ -1,5 +1,9 @@
+// ──────────────────────────────────────────────────────────────────────────────
+// Data types — your Express backend GET /api/data must return this exact shape.
+// ──────────────────────────────────────────────────────────────────────────────
+
 export interface DailyMetric {
-  date: string;
+  date: string;       // "YYYY-MM-DD"
   signups: number;
   leads: number;
   contacted: number;
@@ -8,154 +12,191 @@ export interface DailyMetric {
 }
 
 export interface Member {
-  id: string;
-  name: string;
-  department: string;
+  id: string;                    // URL-safe slug of the name
+  name: string;                  // Full name, e.g. "Malek Elfahem"
+  department: string;            // e.g. "MKT", "OGTa", "BD"
   signups: number;
   leads: number;
   contacted: number;
   interested: number;
-  applied: number;
-  conversionRate: number;
-  boothsAttended: number;
-  dailyMetrics: DailyMetric[];
-  universitiesVisited: string[];
-  productsPromoted: string[];
+  applied: number;               // COUNT of unique Expa Person IDs attributed to this member
+  conversionRate: number;        // (applied / signups) * 100
+  boothsAttended: number;       // How many booth-days this member worked
+  dailyMetrics: DailyMetric[];   // Per-day breakdown (can be empty [])
+  universitiesVisited: string[]; // Array of university slugs (id values)
+  productsPromoted: string[];    // Array of product slugs (id values)
+  universityBreakdown?: { id: string; name: string; signups: number }[];
+  productBreakdown?: { id: string; name: string; signups: number }[];
 }
 
 export interface University {
-  id: string;
-  name: string;
-  location: string;
+  id: string;           // URL-safe slug, e.g. "isgs-sousse"
+  name: string;         // Full name
+  location: string;     // City/region (can be "")
   signups: number;
   leads: number;
   contacted: number;
   interested: number;
   applied: number;
-  conversionRate: number;
+  conversionRate: number; // (applied / signups) * 100
+  dailyMetrics?: DailyMetric[];
 }
 
 export interface Product {
-  id: string;
-  name: string;
-  description: string;
+  id: string;           // URL-safe slug, e.g. "gta"
+  name: string;         // e.g. "GTa", "GV", "OGV"
+  description: string;  // Short description (can be "")
   signups: number;
   leads: number;
   contacted: number;
   interested: number;
   applied: number;
-  conversionRate: number;
+  conversionRate: number; // (applied / signups) * 100
+  dailyMetrics?: DailyMetric[];
+}
+
+export interface Department {
+  id: string;
+  name: string;         // e.g. "MKT", "PM&Ewa"
+  signups: number;
+  leads: number;
+  contacted: number;
+  interested: number;
+  applied: number;
+  conversionRate: number; // (applied / signups) * 100
 }
 
 export interface CampaignData {
-  date: string;
+  date: string;         // "YYYY-MM-DD"
   signups: number;
   leads: number;
   contacted: number;
   interested: number;
   applied: number;
 }
-// Generate daily campaign metrics for the last 120 days
-function generateDailyMetrics(): CampaignData[] {
-  const metrics: CampaignData[] = [];
-  const today = new Date();
 
-  for (let i = 120; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-
-    const baseSignups = Math.floor(Math.random() * 200 + 150);
-    const signups = Math.max(0, baseSignups + (Math.random() > 0.5 ? 50 : -30));
-    const leads = Math.floor(signups * 0.8 * (0.85 + Math.random() * 0.3));
-    const contacted = Math.floor(leads * 0.7 * (0.85 + Math.random() * 0.3));
-    const interested = Math.floor(contacted * 0.8 * (0.85 + Math.random() * 0.3));
-    const applied = Math.floor(interested * 0.6 * (0.85 + Math.random() * 0.3));
-
-    metrics.push({
-      date: date.toISOString().split("T")[0],
-      signups: Math.floor(signups),
-      leads: Math.floor(leads),
-      contacted: Math.floor(contacted),
-      interested: Math.floor(interested),
-      applied: Math.floor(applied),
-    });
-  }
-
-  return metrics;
+export interface DashboardResponse {
+  members: Member[];
+  universities: University[];
+  products: Product[];
+  departments: Department[];
+  campaignMetrics: CampaignData[];
+  totals: {
+    signups: number;
+    leads: number;
+    contacted: number;
+    interested: number;
+    applied: number;       // Global: COUNT(UNIQUE(Person ID)) from Expa Application sheet
+    alreadyExists?: number;
+  };
+  conversionRate: number;  // (totals.applied / totals.signups) * 100
 }
 
-const dailyMetrics = generateDailyMetrics();
+// ──────────────────────────────────────────────────────────────────────────────
+// Sample mock data — used as fallback when the backend is unreachable.
+// This illustrates the exact shape the backend should return.
+// ──────────────────────────────────────────────────────────────────────────────
 
-// Calculate totals from daily metrics
-const totals = dailyMetrics.reduce(
-  (acc, day) => ({
-    signups: acc.signups + day.signups,
-    leads: acc.leads + day.leads,
-    contacted: acc.contacted + day.contacted,
-    interested: acc.interested + day.interested,
-    applied: acc.applied + day.applied,
-  }),
-  { signups: 0, leads: 0, contacted: 0, interested: 0, applied: 0 }
-);
-
-const members: Member[] = [
+const sampleMembers: Member[] = [
   {
-    id: "member-1",
-    name: "Member 1",
-    department: "General",
-    signups: 0,
-    leads: 0,
+    id: "malek-elfahem",
+    name: "Malek Elfahem",
+    department: "MKT",
+    leads: 449,
+    signups: 406,
+    contacted: 0,
+    interested: 0,
+    applied: 2,
+    conversionRate: 0.49,
+    boothsAttended: 19,
+    dailyMetrics: [],
+    universitiesVisited: ["isgs-sousse", "epi-sousse"],
+    productsPromoted: ["gta", "gte"],
+  },
+  {
+    id: "chaima-dhouibi",
+    name: "Chaima Dhouibi",
+    department: "MKT",
+    leads: 320,
+    signups: 280,
     contacted: 0,
     interested: 0,
     applied: 0,
     conversionRate: 0,
-    boothsAttended: 0,
+    boothsAttended: 12,
     dailyMetrics: [],
-    universitiesVisited: [],
-    productsPromoted: [],
+    universitiesVisited: ["isgs-sousse", "fseg-sousse"],
+    productsPromoted: ["gta"],
+  },
+  {
+    id: "yomna-ben-amor",
+    name: "Yomna Ben Amor",
+    department: "IM",
+    leads: 50,
+    signups: 40,
+    contacted: 0,
+    interested: 0,
+    applied: 1,
+    conversionRate: 2.5,
+    boothsAttended: 3,
+    dailyMetrics: [],
+    universitiesVisited: ["fseg-sousse"],
+    productsPromoted: ["ogv"],
   },
 ];
 
-const departments = [...new Set(members.map((m) => m.department))];
-
-const universities: University[] = [
-  { id: "uni-1", name: "General", location: "", signups: 0, leads: 0, contacted: 0, interested: 0, applied: 0, conversionRate: 0 },
-];
-const products: Product[] = [
-  { id: "product-1", name: "General", description: "", signups: 0, leads: 0, contacted: 0, interested: 0, applied: 0, conversionRate: 0 },
+const sampleUniversities: University[] = [
+  { id: "isgs-sousse", name: "ISGS Sousse", location: "Sousse", signups: 300, leads: 400, contacted: 0, interested: 0, applied: 1, conversionRate: 0.33 },
+  { id: "epi-sousse", name: "EPI Sousse", location: "Sousse", signups: 180, leads: 220, contacted: 0, interested: 0, applied: 1, conversionRate: 0.56 },
+  { id: "fseg-sousse", name: "FSEG Sousse", location: "Sousse", signups: 120, leads: 150, contacted: 0, interested: 0, applied: 0, conversionRate: 0 },
 ];
 
-const departmentStats = departments.map((dept) => {
-  const deptMembers = members.filter((m) => m.department === dept);
-  const totals = deptMembers.reduce(
-    (acc, m) => ({
-      signups: acc.signups + m.signups,
-      leads: acc.leads + m.leads,
-      contacted: acc.contacted + m.contacted,
-      interested: acc.interested + m.interested,
-      applied: acc.applied + m.applied,
-    }),
-    { signups: 0, leads: 0, contacted: 0, interested: 0, applied: 0 }
-  );
+const sampleProducts: Product[] = [
+  { id: "gta", name: "GTa", description: "", signups: 400, leads: 500, contacted: 0, interested: 0, applied: 1, conversionRate: 0.25 },
+  { id: "gte", name: "GTe", description: "", signups: 200, leads: 250, contacted: 0, interested: 0, applied: 1, conversionRate: 0.5 },
+  { id: "ogv", name: "OGV", description: "", signups: 60, leads: 80, contacted: 0, interested: 0, applied: 0, conversionRate: 0 },
+];
 
-  return {
-    id: dept.toLowerCase().replace(/\s+/g, "-"),
-    name: dept,
-    signups: totals.signups,
-    leads: totals.leads,
-    contacted: totals.contacted,
-    interested: totals.interested,
-    applied: totals.applied,
-    conversionRate: (totals.applied / totals.signups) * 100,
-  };
-});
+const sampleDepartments: Department[] = [
+  { id: "mkt", name: "MKT", signups: 686, leads: 769, contacted: 0, interested: 0, applied: 2, conversionRate: 0.29 },
+  { id: "im", name: "IM", signups: 40, leads: 50, contacted: 0, interested: 0, applied: 1, conversionRate: 2.5 },
+];
 
-export const mockData = {
-  campaignMetrics: dailyMetrics,
-  members,
-  universities,
-  products,
-  departments: departmentStats,
-  totals,
-  conversionRate: (totals.applied / totals.signups) * 100,
+function generateSampleCampaignMetrics(): CampaignData[] {
+  const metrics: CampaignData[] = [];
+  const today = new Date();
+  for (let i = 30; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const leads = Math.floor(Math.random() * 80 + 20);
+    const signups = Math.floor(leads * (0.7 + Math.random() * 0.2));
+    metrics.push({
+      date: d.toISOString().slice(0, 10),
+      leads,
+      signups,
+      contacted: 0,
+      interested: 0,
+      applied: Math.floor(Math.random() * 3),
+    });
+  }
+  return metrics;
+}
+
+const sampleCampaignMetrics = generateSampleCampaignMetrics();
+
+export const mockData: DashboardResponse = {
+  members: sampleMembers,
+  universities: sampleUniversities,
+  products: sampleProducts,
+  departments: sampleDepartments,
+  campaignMetrics: sampleCampaignMetrics,
+  totals: {
+    leads: 819,
+    signups: 726,
+    contacted: 0,
+    interested: 0,
+    applied: 131,
+    alreadyExists: 93,
+  },
+  conversionRate: 18.04,
 };

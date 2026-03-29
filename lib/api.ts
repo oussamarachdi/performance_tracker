@@ -1,48 +1,20 @@
-import type { Member, University, Product, CampaignData } from "@/lib/mockData";
+import type { DashboardResponse } from "@/lib/mockData";
 import { mockData } from "@/lib/mockData";
 
-export interface DashboardData {
-  members: Member[];
-  universities: University[];
-  products: Product[];
-  departments: {
-    id: string;
-    name: string;
-    signups: number;
-    leads: number;
-    contacted: number;
-    interested: number;
-    applied: number;
-    conversionRate: number;
-  }[];
-  campaignMetrics: CampaignData[];
-  totals: {
-    signups: number;
-    leads: number;
-    contacted: number;
-    interested: number;
-    applied: number;
-    /** Rows where account status = "already exists with this email" */
-    alreadyExists?: number;
-  };
-  conversionRate: number;
-}
+export type { DashboardResponse as DashboardData };
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 /**
- * Fetches dashboard data from the API. Falls back to mockData when:
- * - NEXT_PUBLIC_USE_LIVE_DATA is not 'true', or
- * - The API request fails (e.g. no sheet configured, network error).
+ * Fetches dashboard data from the external Express backend.
+ * Falls back to mockData when the backend is unreachable.
  */
-export async function getDashboardData(): Promise<DashboardData> {
-  if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_USE_LIVE_DATA !== "true") {
-    return mockData as DashboardData;
-  }
+export async function getDashboardData(): Promise<DashboardResponse> {
   try {
-    const res = await fetch("/api/data", { cache: "no-store" });
-    if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
-    const data = (await res.json()) as DashboardData;
-    return data;
+    const res = await fetch(`${API_BASE}/api/data`, { cache: "no-store" });
+    if (!res.ok) throw new Error(res.statusText);
+    return (await res.json()) as DashboardResponse;
   } catch {
-    return mockData as DashboardData;
+    return mockData;
   }
 }

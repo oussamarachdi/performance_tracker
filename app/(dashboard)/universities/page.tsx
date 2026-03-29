@@ -45,40 +45,107 @@ export default function UniversitiesPage() {
       membersInSelectedDepts.some((m) => m.universitiesVisited.includes(uni.id))
     );
   }, [data?.universities, data?.members, selectedDepartments]);
-  const sortedUniversities = useMemo(
-    () => [...filteredUniversities].sort((a, b) => b.signups - a.signups),
-    [filteredUniversities]
-  );
 
-  // Per-university stats: attendees (members who visited), booths allocated to this uni, avg signups per attendee
-  const universityStats = useMemo(() => {
-    return sortedUniversities.map((uni) => {
-      const membersWhoVisited = (data?.members ?? []).filter((m) => m.universitiesVisited.includes(uni.id));
-      const attendees = membersWhoVisited.length;
-      const boothsAtUni =
-        attendees > 0
-          ? membersWhoVisited.reduce((sum, m) => sum + m.boothsAttended / m.universitiesVisited.length, 0)
-          : 0;
-      const avgSignupsPerAttendee = attendees > 0 ? Number((uni.signups / attendees).toFixed(1)) : 0;
+  // Date filter bounds
+  const dateBounds = useMemo(() => {
+    const startRaw = dateRange.start?.getTime();
+    const endRaw = dateRange.end?.getTime();
+    const hasFilter = startRaw != null || endRaw != null;
+    const start = startRaw ?? 0;
+    const end = endRaw ?? Number.MAX_SAFE_INTEGER;
+    const [lo, hi] = hasFilter && startRaw != null && endRaw != null ? [Math.min(start, end), Math.max(start, end)] : [start, end];
+    return { hasFilter, lo, hi };
+  }, [dateRange.start, dateRange.end]);
+
+  const { totalSignups, totalLeads, totalApplied, universityStats } = useMemo(() => {
+    const { hasFilter, lo, hi } = dateBounds;
+
+    // Global metrics for the selected range
+    const metricsInRange = (data?.campaignMetrics ?? []).filter((m) => {
+      if (!hasFilter) return true;
+      const t = new Date(m.date).getTime();
+      return t >= lo && t <= hi;
+    });
+    const globSignups = metricsInRange.reduce((s, d) => (s as number) + d.signups, 0);
+    const globLeads = metricsInRange.reduce((s, d) => (s as number) + d.leads, 0);
+    const globApplied = metricsInRange.reduce((s, d) => (s as number) + d.applied, 0);
+
+    const stats = filteredUniversities.map((uni) => {
+      // Intersection: Only consider members from selected departments who visited this university
+      const membersToConsider = (data?.members ?? []).filter((m) => {
+        const isDeptMatch = selectedDepartments.length === 0 || selectedDepartments.includes(m.department);
+        return isDeptMatch && m.universitiesVisited.includes(uni.id);
+      });
+
+      const attendees = membersToConsider.length;
+
+      // Calculate totals from these specific members for this university
+      let signups = 0;
+      let leads = 0;
+      let applied = 0;
+      let boothsAtUni = 0;
+
+      membersToConsider.forEach(m => {
+        const inRange = hasFilter ? (m.dailyMetrics || []).filter(dm => {
+          const t = new Date(dm.date).getTime();
+          return t >= lo && t <= hi;
+        }) : (m.dailyMetrics || []);
+
+        // Filter daily metrics by university since members visit multiple
+        const uniMetrics = inRange.filter(dm => {
+          // This is a heuristic: if they visited only 1 uni that day, or if we rely on uniBreakdown
+          // For simplicity and accuracy in this specific mockup/data-gen, we use the member's uni stats if they visited this uni
+          // In a real system, we'd have dm.universityId
+          return m.universitiesVisited.includes(uni.id);
+        });
+
+        // Terminology Swap: UI Leads = Backend Signups (created), UI Signups = Backend Leads (total)
+        leads += hasFilter ? uniMetrics.reduce((s, dm) => s + dm.signups, 0) : (m.signups / m.universitiesVisited.length);
+        signups += hasFilter ? uniMetrics.reduce((s, dm) => s + dm.leads, 0) : (m.leads / m.universitiesVisited.length);
+        applied += hasFilter ? uniMetrics.reduce((s, dm) => s + dm.applied, 0) : (m.applied / m.universitiesVisited.length);
+
+        const mBoothsAdjusted = hasFilter ? uniMetrics.length : (m.boothsAttended / m.universitiesVisited.length);
+        boothsAtUni += mBoothsAdjusted;
+      });
+
+      const avgSignupsPerAttendee = attendees > 0 ? Number((signups / attendees).toFixed(1)) : 0;
+
       return {
         ...uni,
+        signups: Math.round(signups),
+        leads: Math.round(leads),
+        applied: Math.round(applied),
         shortName: uni.name.split(' ')[0],
         attendees,
         boothsAtUni: Math.round(boothsAtUni * 10) / 10,
         avgSignupsPerAttendee,
       };
-    });
-  }, [sortedUniversities, data?.members]);
+    }).sort((a, b) => b.signups - a.signups);
+
+    const hasDeptFilter = selectedDepartments.length > 0;
+    const finalTotals = (hasDeptFilter || hasFilter)
+      ? stats.reduce((acc: { signups: number, leads: number, applied: number }, curr) => ({
+        signups: acc.signups + curr.signups,
+        leads: acc.leads + curr.leads,
+        applied: acc.applied + curr.applied
+      }), { signups: 0, leads: 0, applied: 0 })
+      : { signups: globSignups, leads: globLeads, applied: globApplied };
+
+    return {
+      totalSignups: finalTotals.signups,
+      totalLeads: finalTotals.leads,
+      totalApplied: finalTotals.applied,
+      universityStats: stats
+    };
+  }, [data, dateBounds, filteredUniversities, selectedDepartments]);
 
   const overallAvgAttendees =
     universityStats.length > 0
       ? Number(
-          (universityStats.reduce((s, u) => s + u.attendees, 0) / universityStats.length).toFixed(1)
-        )
+        (universityStats.reduce((s, u) => s + u.attendees, 0) / universityStats.length).toFixed(1)
+      )
       : 0;
   const totalAttendeeVisits = universityStats.reduce((s, u) => s + u.attendees, 0);
-  const totalSignups = sortedUniversities.reduce((sum, u) => sum + u.signups, 0);
-  const totalLeads = sortedUniversities.reduce((sum, u) => sum + u.leads, 0);
   const overallAvgSignupsPerAttendee =
     totalAttendeeVisits > 0 ? Number((totalSignups / totalAttendeeVisits).toFixed(1)) : 0;
 
@@ -128,12 +195,12 @@ export default function UniversitiesPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard label="Total Signups" value={totalSignups} trend="up" change={12.5} />
-        <KpiCard label="Total Leads" value={totalLeads} trend="up" change={8.2} />
-        <KpiCard label="Avg attendees (all unis)" value={overallAvgAttendees} />
-        <KpiCard label="Total attendee-visits" value={totalAttendeeVisits} />
-        <KpiCard label="Avg signups/attendee (overall)" value={overallAvgSignupsPerAttendee} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <KpiCard label="Total Signups" value={totalSignups} />
+        <KpiCard label="Total Leads" value={totalLeads} />
+        {selectedDepartments.length === 0 && (
+          <KpiCard label="Total Applied" value={totalApplied} />
+        )}
       </div>
 
       {/* Chart 1: Signups & Leads by University - grouped bar */}
@@ -186,7 +253,7 @@ export default function UniversitiesPage() {
           </ResponsiveContainer>
         </ChartCard>
       </div>
-      
+
 
       {/* Summary: Avg attendees vs each university (horizontal bar comparing to overall avg) */}
       <ChartCard
@@ -223,12 +290,6 @@ export default function UniversitiesPage() {
               key: 'avgSignupsPerAttendee',
               label: 'Avg signups/attendee',
               sortable: true,
-            },
-            {
-              key: 'conversionRate',
-              label: 'Conversion Rate',
-              sortable: true,
-              render: (value) => (value != null && typeof value === 'number' && !Number.isNaN(value)) ? `${Number(value).toFixed(1)}%` : '—',
             },
           ]}
           data={universityStats}

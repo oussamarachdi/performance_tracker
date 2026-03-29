@@ -45,19 +45,87 @@ export default function ProductsPage() {
     );
   }, [data?.products, data?.members, selectedDepartments]);
 
-  const productsWithMembersCount = useMemo(() => {
-    const members = data?.members ?? [];
-    return filteredProducts.map((p) => {
-      const membersSelling = members.filter((m) => m.productsPromoted.includes(p.id)).length;
-      return { ...p, membersSelling };
-    });
-  }, [filteredProducts, data?.members]);
+  // Date filter bounds
+  const dateBounds = useMemo(() => {
+    const startRaw = dateRange.start?.getTime();
+    const endRaw = dateRange.end?.getTime();
+    const hasFilter = startRaw != null || endRaw != null;
+    const start = startRaw ?? 0;
+    const end = endRaw ?? Number.MAX_SAFE_INTEGER;
+    const [lo, hi] = hasFilter && startRaw != null && endRaw != null ? [Math.min(start, end), Math.max(start, end)] : [start, end];
+    return { hasFilter, lo, hi };
+  }, [dateRange.start, dateRange.end]);
 
-  const totalSignups = filteredProducts.reduce((sum, p) => sum + p.signups, 0);
-  const totalLeads = filteredProducts.reduce((sum, p) => sum + p.leads, 0);
-  const totalContacted = filteredProducts.reduce((sum, p) => sum + p.contacted, 0);
-  const totalApplied = data?.totals?.applied ?? 0;
-  const totalMembersSelling = productsWithMembersCount.reduce((sum, p) => sum + p.membersSelling, 0);
+  const { totalSignups, totalLeads, totalApplied, productsWithMembersCount } = useMemo(() => {
+    const { hasFilter, lo, hi } = dateBounds;
+
+    // Global metrics for the selected range
+    const metricsInRange = (data?.campaignMetrics ?? []).filter((m) => {
+      if (!hasFilter) return true;
+      const t = new Date(m.date).getTime();
+      return t >= lo && t <= hi;
+    });
+    const globSignups = metricsInRange.reduce((s, d) => (s as number) + d.signups, 0);
+    const globLeads = metricsInRange.reduce((s, d) => (s as number) + d.leads, 0);
+    const globApplied = metricsInRange.reduce((s, d) => (s as number) + d.applied, 0);
+
+    const stats = filteredProducts.map((p) => {
+      // Intersection: Only consider members from selected departments who promote this product
+      const membersToConsider = (data?.members ?? []).filter((m) => {
+        const isDeptMatch = selectedDepartments.length === 0 || selectedDepartments.includes(m.department);
+        return isDeptMatch && m.productsPromoted.includes(p.id);
+      });
+
+      const membersSelling = membersToConsider.length;
+
+      // Calculate totals from these specific members for this product
+      let signups = 0;
+      let leads = 0;
+      let applied = 0;
+
+      membersToConsider.forEach(m => {
+        const inRange = hasFilter ? (m.dailyMetrics || []).filter(dm => {
+          const t = new Date(dm.date).getTime();
+          return t >= lo && t <= hi;
+        }) : (m.dailyMetrics || []);
+
+        // Filter daily metrics by product
+        const prodMetrics = inRange.filter(dm => {
+          return m.productsPromoted.includes(p.id);
+        });
+
+        // Terminology Swap: UI Leads = Backend Signups (created), UI Signups = Backend Leads (total)
+        leads += hasFilter ? prodMetrics.reduce((s, dm) => s + dm.signups, 0) : (m.signups / m.productsPromoted.length);
+        signups += hasFilter ? prodMetrics.reduce((s, dm) => s + dm.leads, 0) : (m.leads / m.productsPromoted.length);
+        applied += hasFilter ? prodMetrics.reduce((s, dm) => s + dm.applied, 0) : (m.applied / m.productsPromoted.length);
+      });
+
+      return {
+        ...p,
+        signups: Math.round(signups),
+        leads: Math.round(leads),
+        applied: Math.round(applied),
+        membersSelling,
+        conversionRate: signups > 0 ? (applied / signups) * 100 : 0
+      };
+    });
+
+    const hasDeptFilter = selectedDepartments.length > 0;
+    const finalTotals = (hasDeptFilter || hasFilter)
+      ? stats.reduce((acc: { signups: number, leads: number, applied: number }, curr) => ({
+        signups: acc.signups + curr.signups,
+        leads: acc.leads + curr.leads,
+        applied: acc.applied + curr.applied
+      }), { signups: 0, leads: 0, applied: 0 })
+      : { signups: globSignups, leads: globLeads, applied: globApplied };
+
+    return {
+      totalSignups: finalTotals.signups,
+      totalLeads: finalTotals.leads,
+      totalApplied: finalTotals.applied,
+      productsWithMembersCount: stats
+    };
+  }, [data, dateBounds, filteredProducts, selectedDepartments]);
 
   const chartData = productsWithMembersCount.map((p) => ({
     name: p.name,
@@ -106,14 +174,16 @@ export default function ProductsPage() {
       />
 
       {/* Summary KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard label="Total Signups" value={totalSignups} trend="up" change={12.5} />
-        <KpiCard label="Total Leads" value={totalLeads} trend="up" change={8.2} />
-        <KpiCard label="Total Applied" value={totalApplied} trend="up" change={18.7} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <KpiCard label="Total Signups" value={totalSignups} />
+        <KpiCard label="Total Leads" value={totalLeads} />
+        {selectedDepartments.length === 0 && (
+          <KpiCard label="Total Applied" value={totalApplied} />
+        )}
       </div>
 
       {/* Product Distribution and Performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Pie Chart */}
         <ChartCard
           title="Signups Distribution"
@@ -122,7 +192,7 @@ export default function ProductsPage() {
           <ResponsiveContainer width="100%" height={350}>
             <PieChart>
               <Pie
-                data={filteredProducts}
+                data={productsWithMembersCount}
                 dataKey="signups"
                 nameKey="name"
                 cx="50%"
@@ -130,7 +200,7 @@ export default function ProductsPage() {
                 outerRadius={100}
                 label
               >
-                {filteredProducts.map((_, index) => (
+                {productsWithMembersCount.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -143,31 +213,6 @@ export default function ProductsPage() {
                 labelStyle={{ color: '#f5f5f5' }}
               />
             </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        {/* Conversion Rate Chart */}
-        <ChartCard
-          title="Conversion Rate by Product"
-          description="Application conversion percentage"
-        >
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
-              <XAxis dataKey="name" stroke="#a0a0a0" style={{ fontSize: '12px' }} />
-              <YAxis stroke="#a0a0a0" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#252525',
-                  border: '1px solid #404040',
-                  borderRadius: '8px',
-                }}
-                labelStyle={{ color: '#f5f5f5' }}
-                formatter={(value) => (value != null && typeof value === 'number' && !Number.isNaN(value)) ? `${Number(value).toFixed(1)}%` : '—'}
-              />
-              <Legend />
-              <Bar dataKey="conversionRate" fill="#f59e0b" />
-            </BarChart>
           </ResponsiveContainer>
         </ChartCard>
       </div>
@@ -194,7 +239,7 @@ export default function ProductsPage() {
       {/* Performance Metrics */}
       <ChartCard
         title="Product Performance"
-        description="Signups, leads, applications and members selling by product"
+        description="Signups, leads, and members selling by product"
         className="col-span-full"
       >
         <ResponsiveContainer width="100%" height={350}>
@@ -207,9 +252,8 @@ export default function ProductsPage() {
               labelStyle={{ color: '#F8FAFC' }}
             />
             <Legend />
-            <Bar dataKey="signups" fill={CHART_COLORS.primary} />
-            <Bar dataKey="leads" fill={CHART_COLORS.secondary} />
-            <Bar dataKey="applied" fill={CHART_COLORS.accent} />
+            <Bar dataKey="signups" name="Signups" fill={CHART_COLORS.primary} />
+            <Bar dataKey="leads" name="Leads" fill={CHART_COLORS.secondary} />
             <Bar dataKey="membersSelling" name="Members selling" fill={CHART_COLORS.neutral} />
           </BarChart>
         </ResponsiveContainer>
@@ -223,13 +267,6 @@ export default function ProductsPage() {
             { key: 'membersSelling', label: 'Members selling', sortable: true },
             { key: 'signups', label: 'Signups', sortable: true },
             { key: 'leads', label: 'Leads', sortable: true },
-            { key: 'applied', label: 'Applied', sortable: true },
-            {
-              key: 'conversionRate',
-              label: 'Conversion Rate',
-              sortable: true,
-              render: (value) => (value != null && typeof value === 'number' && !Number.isNaN(value)) ? `${Number(value).toFixed(1)}%` : '—',
-            },
           ]}
           data={productsWithMembersCount}
           onRowClick={(row) => setSelectedProduct(data.products.find((p) => p.id === row.id) ?? null)}

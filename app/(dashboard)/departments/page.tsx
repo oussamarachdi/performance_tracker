@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { getDashboardData } from '@/lib/api';
 import type { DashboardData } from '@/lib/api';
 import { KpiCard } from '@/components/dashboard/KpiCard';
@@ -28,36 +28,63 @@ export default function DepartmentsPage() {
     getDashboardData().then(setData);
   }, []);
 
-  // Filter departments based on date range
-  const filteredDepartments = (data?.departments ?? []).filter((d) => {
-    // Date range filtering (placeholder - would need actual date data)
-    if (dateRange.start || dateRange.end) {
-      return true;
-    }
-    return true;
-  });
+  // Date filter bounds
+  const dateBounds = useMemo(() => {
+    const startRaw = dateRange.start?.getTime();
+    const endRaw = dateRange.end?.getTime();
+    const hasFilter = startRaw != null || endRaw != null;
+    const start = startRaw ?? 0;
+    const end = endRaw ?? Number.MAX_SAFE_INTEGER;
+    const [lo, hi] = hasFilter && startRaw != null && endRaw != null ? [Math.min(start, end), Math.max(start, end)] : [start, end];
+    return { hasFilter, lo, hi };
+  }, [dateRange.start, dateRange.end]);
 
-  const totalSignups = filteredDepartments.reduce((sum, d) => sum + d.signups, 0);
-  const totalLeads = filteredDepartments.reduce((sum, d) => sum + d.leads, 0);
-  const totalContacted = filteredDepartments.reduce((sum, d) => sum + d.contacted, 0);
-  const totalApplied = data?.totals?.applied ?? 0;
+  const { totalSignups, totalLeads, totalApplied, attendeePerformanceByDept } = useMemo(() => {
+    const { hasFilter, lo, hi } = dateBounds;
+    const metricsInRange = (data?.campaignMetrics ?? []).filter((m) => {
+      if (!hasFilter) return true;
+      const t = new Date(m.date).getTime();
+      return t >= lo && t <= hi;
+    });
 
-  // Attendee performance by department (from members)
-  const attendeePerformanceByDept = filteredDepartments.map((dept) => {
-    const deptMembers = (data?.members ?? []).filter((m) => m.department === dept.name);
-    const totalBooths = deptMembers.reduce((sum, m) => sum + m.boothsAttended, 0);
-    const totalSignupsDept = deptMembers.reduce((sum, m) => sum + m.signups, 0);
-    return {
-      name: dept.name,
-      signups: totalSignupsDept,
-      leads: dept.leads,
-      applied: dept.applied,
-      attendees: deptMembers.length,
-      boothsAttended: totalBooths,
-      avgSignupsPerBooth: totalBooths > 0 ? Number((totalSignupsDept / totalBooths).toFixed(1)) : 0,
-      conversionRate: dept.conversionRate,
-    };
-  });
+    const signups = metricsInRange.reduce((s, d) => s + d.signups, 0);
+    const leads = metricsInRange.reduce((s, d) => s + d.leads, 0);
+    const applied = metricsInRange.reduce((s, d) => s + d.applied, 0);
+
+    const perf = (data?.departments ?? []).map((dept) => {
+      const deptMembers = (data?.members ?? []).filter((m) => m.department === dept.name);
+
+      let dSignups = 0;
+      let dLeads = 0;
+      let dApplied = 0;
+      let dBooths = 0;
+
+      deptMembers.forEach(m => {
+        const inRange = hasFilter ? m.dailyMetrics.filter(dm => {
+          const t = new Date(dm.date).getTime();
+          return t >= lo && t <= hi;
+        }) : m.dailyMetrics;
+
+        dSignups += hasFilter ? inRange.reduce((s, dm) => s + dm.signups, 0) : m.signups;
+        dLeads += hasFilter ? inRange.reduce((s, dm) => s + dm.leads, 0) : m.leads;
+        dApplied += hasFilter ? inRange.reduce((s, dm) => s + dm.applied, 0) : m.applied;
+        dBooths += hasFilter ? inRange.length : m.boothsAttended;
+      });
+
+      return {
+        name: dept.name,
+        signups: dSignups,
+        leads: dLeads,
+        applied: dApplied,
+        attendees: deptMembers.length,
+        boothsAttended: dBooths,
+        avgSignupsPerBooth: dBooths > 0 ? Number((dSignups / dBooths).toFixed(1)) : 0,
+        conversionRate: dSignups > 0 ? (dApplied / dSignups) * 100 : 0
+      };
+    });
+
+    return { totalSignups: signups, totalLeads: leads, totalApplied: applied, attendeePerformanceByDept: perf };
+  }, [data, dateBounds]);
 
   const handleReset = () => {
     setDateRange({ start: null, end: null });
@@ -89,19 +116,18 @@ export default function DepartmentsPage() {
 
       {/* Summary KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <KpiCard label="Total Signups" value={totalSignups} trend="up" change={12.5} />
-        <KpiCard label="Total Leads" value={totalLeads} trend="up" change={8.2} />
-        <KpiCard label="Total Applied" value={totalApplied} trend="up" change={18.7} />
+        <KpiCard label="Total Signups" value={totalSignups} />
+        <KpiCard label="Total Leads" value={totalLeads} />
+        <KpiCard label="Total Applied" value={totalApplied} />
       </div>
 
-      {/* Signups by Department Chart */}
       <ChartCard
         title="Signups by Department"
         description="Distribution of signups across departments"
         className="col-span-full"
       >
         <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={filteredDepartments}>
+          <BarChart data={attendeePerformanceByDept}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
             <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: '12px' }} />
             <YAxis stroke="#94a3b8" style={{ fontSize: '12px' }} />
@@ -114,9 +140,8 @@ export default function DepartmentsPage() {
               labelStyle={{ color: '#F8FAFC' }}
             />
             <Legend />
-            <Bar dataKey="signups" fill={CHART_COLORS.primary} />
-            <Bar dataKey="leads" fill={CHART_COLORS.secondary} />
-            <Bar dataKey="applied" fill={CHART_COLORS.accent} />
+            <Bar dataKey="signups" name="Signups" fill={CHART_COLORS.primary} />
+            <Bar dataKey="leads" name="Leads" fill={CHART_COLORS.secondary} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -159,7 +184,6 @@ export default function DepartmentsPage() {
             { key: 'name', label: 'Department', sortable: true },
             { key: 'signups', label: 'Signups', sortable: true },
             { key: 'leads', label: 'Leads', sortable: true },
-            { key: 'applied', label: 'Applied', sortable: true },
             { key: 'attendees', label: 'Attendees', sortable: true },
             { key: 'boothsAttended', label: 'Booths attended', sortable: true },
             { key: 'avgSignupsPerBooth', label: 'Avg signups / booth', sortable: true },
